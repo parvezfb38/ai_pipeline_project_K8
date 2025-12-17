@@ -10,22 +10,31 @@ jobs:
       - checkout
 
       - run:
-          name: Install kubectl
+          name: Install AWS CLI & kubectl
           command: |
             sudo apt-get update
-            sudo apt-get install -y curl
-            curl -LO https://dl.k8s.io/release/$(curl -Ls https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl
+            sudo apt-get install -y curl unzip python3-pip
+
+            # Install AWS CLI v2 (REQUIRED for EKS auth)
+            curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+            unzip awscliv2.zip
+            sudo ./aws/install
+            aws --version
+
+            # Install kubectl
+            curl -LO "https://dl.k8s.io/release/$(curl -Ls https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
             chmod +x kubectl
             sudo mv kubectl /usr/local/bin/kubectl
+            kubectl version --client
 
       - run:
-          name: Restore kubeconfig
+          name: Restore kubeconfig & verify cluster access
           command: |
             echo "$KUBE_CONFIG_DATA" | base64 --decode > /tmp/kubeconfig
             kubectl get nodes
 
       - run:
-          name: Prepare namespace & configmap
+          name: Prepare namespace & ConfigMap
           command: |
             kubectl get ns k6 || kubectl create ns k6
             kubectl delete configmap k6-scripts -n k6 --ignore-not-found
@@ -40,7 +49,7 @@ jobs:
             kubectl apply -f k8s/k6-job.yaml
 
       - run:
-          name: Wait for job (FAIL on SLA breach)
+          name: Wait for job (FAIL pipeline on SLA breach)
           command: |
             kubectl wait --for=condition=complete job/k6-demo -n k6 --timeout=600s
             POD=$(kubectl get pods -n k6 -l job-name=k6-demo -o jsonpath='{.items[0].metadata.name}')
@@ -50,7 +59,7 @@ jobs:
           path: k6-output.log
 
       - run:
-          name: AI Summary (optional)
+          name: AI Summary (optional, feature-flagged)
           command: |
             python3 ci/ai_call.py || true
 
@@ -62,10 +71,17 @@ jobs:
       - image: cimg/python:3.11
     steps:
       - checkout
+
       - run:
-          command: pip install requests
+          name: Install dependencies
+          command: |
+            pip install requests
+
       - run:
-          command: python3 ci/speedcurve_post.py
+          name: Trigger SpeedCurve test
+          command: |
+            python3 ci/speedcurve_post.py
+
       - store_artifacts:
           path: speedcurve_response.json
 
