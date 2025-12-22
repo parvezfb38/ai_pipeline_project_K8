@@ -18,6 +18,6 @@ export default function () {
     "response < 500ms": r => r.timings.duration < 500,
   });
 
-  sleep(2);
+  sleep(1);
 }
 
