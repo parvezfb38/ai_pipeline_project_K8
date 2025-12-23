@@ -6,38 +6,69 @@ pool:
 
 variables:
   KUBECONFIG: $(Pipeline.Workspace)/kubeconfig
+  AI_ENABLED: "true"   # false karoge to AI band
 
 steps:
 - checkout: self
 
+# -------------------------------
+# Install kubectl
+# -------------------------------
 - script: |
     curl -sLO https://dl.k8s.io/release/$(curl -Ls https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl
     chmod +x kubectl
     sudo mv kubectl /usr/local/bin/kubectl
+    kubectl version --client
   displayName: Install kubectl
 
+# -------------------------------
+# Connect to AKS (kubeconfig)
+# -------------------------------
 - script: |
     echo "$(KUBE_CONFIG_DATA)" | base64 --decode > $(KUBECONFIG)
     kubectl get nodes
   displayName: Connect to AKS
 
+# -------------------------------
+# Create namespace + ConfigMap
+# IMPORTANT FIX IS HERE 👇
+# -------------------------------
 - script: |
     kubectl get ns k6 || kubectl create ns k6
-    kubectl delete configmap k6-scripts -n k6 --ignore-not-found
-    kubectl create configmap k6-scripts \
-      --from-file=k6/Prod \
-      -n k6
-  displayName: Prepare k6 scripts
 
+    kubectl delete configmap k6-scripts -n k6 --ignore-not-found
+
+    # 🔥 PROD FOLDER KE ALL TESTS
+    kubectl create configmap k6-scripts \
+      --from-file=k6/prod \
+      -n k6
+  displayName: Prepare k6 scripts (PROD)
+
+# -------------------------------
+# Run k6 Job (multi test)
+# -------------------------------
 - script: |
     kubectl delete job k6-load-test -n k6 --ignore-not-found
     kubectl apply -f k8s/k6-job.yaml
+
     kubectl wait --for=condition=complete job/k6-load-test -n k6 --timeout=600s
+
     POD=$(kubectl get pods -n k6 -l job-name=k6-load-test -o jsonpath='{.items[0].metadata.name}')
-    kubectl logs -n k6 $POD
+    kubectl logs -n k6 $POD | tee k6-output.log
   displayName: Run k6 load tests
 
+# -------------------------------
+# AI Summary (OpenAI)
+# -------------------------------
 - script: |
     python ci/ai_call.py
   displayName: AI Summary
   condition: and(succeeded(), eq(variables['AI_ENABLED'], 'true'))
+
+# -------------------------------
+# Upload artifacts
+# -------------------------------
+- task: PublishBuildArtifacts@1
+  inputs:
+    pathToPublish: k6-output.log
+    artifactName: k6-results
