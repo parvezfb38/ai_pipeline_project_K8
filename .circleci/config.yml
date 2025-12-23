@@ -40,12 +40,15 @@ jobs:
       - run:
           name: Prepare namespace & k6 scripts
           command: |
-            kubectl get ns k6 || kubectl create ns k6
+            echo "Running K6 tests for environment: $K6_ENV"
 
+            kubectl get ns k6 || kubectl create ns k6
             kubectl delete configmap k6-scripts -n k6 --ignore-not-found
+
             kubectl create configmap k6-scripts \
-              --from-file=k6/test.js \
+              --from-file=k6/$K6_ENV \
               -n k6
+
 
       # 4️⃣ Run k6 job
       - run:
