@@ -15,8 +15,9 @@ spec:
         - sh
         - -c
         - |
+          echo "Running all k6 tests..."
           for f in /scripts/*.js; do
-            echo "Running $f"
+            echo "▶ Running $f"
             k6 run $f || exit 1
           done
         volumeMounts:
