@@ -1,34 +1,37 @@
 version: 2.1
 
 jobs:
+  # =========================
+  # 1️⃣ K6 on EKS (MULTI JS)
+  # =========================
   run-k6-on-eks:
     docker:
       - image: cimg/python:3.11
+    environment:
+      K6_ENV: prod   # prod / stage
     steps:
       - checkout
 
-      # 1️⃣ AWS CLI + kubectl install
+      # Install AWS CLI + kubectl
       - run:
           name: Install AWS CLI & kubectl
           command: |
             sudo apt-get update
             sudo apt-get install -y curl unzip
 
-            # AWS CLI v2
             curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
             unzip awscliv2.zip
             sudo ./aws/install
             aws --version
 
-            # kubectl
             curl -LO "https://dl.k8s.io/release/$(curl -Ls https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
             chmod +x kubectl
             sudo mv kubectl /usr/local/bin/kubectl
             kubectl version --client
 
-      # 2️⃣ AWS → EKS kubeconfig (AUTO)
+      # Connect to EKS
       - run:
-          name: Connect to EKS cluster
+          name: Connect to EKS
           command: |
             aws eks update-kubeconfig \
               --region $AWS_DEFAULT_REGION \
@@ -36,12 +39,10 @@ jobs:
 
             kubectl get nodes
 
-      # 3️⃣ Namespace & ConfigMap
+      # Create namespace + ConfigMap (MULTI FILES)
       - run:
-          name: Prepare namespace & k6 scripts
+          name: Prepare k6 scripts
           command: |
-            echo "Running K6 tests for environment: $K6_ENV"
-
             kubectl get ns k6 || kubectl create ns k6
             kubectl delete configmap k6-scripts -n k6 --ignore-not-found
 
@@ -49,27 +50,25 @@ jobs:
               --from-file=k6/$K6_ENV \
               -n k6
 
-
-      # 4️⃣ Run k6 job
+      # Run k6 job
       - run:
-          name: Run k6 load test
+          name: Run k6 load tests
           command: |
             kubectl delete job k6-demo -n k6 --ignore-not-found
             kubectl apply -f k8s/k6-job.yaml
 
-      # 5️⃣ Wait + logs (FAIL pipeline if test fails)
-      - run:
-          name: Collect k6 results
-          command: |
             kubectl wait --for=condition=complete job/k6-demo -n k6 --timeout=600s
 
             POD=$(kubectl get pods -n k6 -l job-name=k6-demo -o jsonpath='{.items[0].metadata.name}')
             kubectl logs -n k6 $POD | tee k6-output.log
 
-      # 6️⃣ Store artifacts
       - store_artifacts:
           path: k6-output.log
 
+
+  # =========================
+  # 2️⃣ SpeedCurve
+  # =========================
   speedcurve-trigger:
     docker:
       - image: cimg/python:3.11
@@ -79,14 +78,60 @@ jobs:
           name: Install deps
           command: pip install requests
       - run:
-          name: Trigger SpeedCurve test
+          name: Trigger SpeedCurve
           command: python3 ci/speedcurve_post.py
       - store_artifacts:
           path: speedcurve_response.json
 
+
+  # =========================
+  # 3️⃣ Lighthouse
+  # =========================
+  lighthouse-test:
+    docker:
+      - image: cimg/node:20.10
+    steps:
+      - checkout
+      - run:
+          name: Install Lighthouse
+          command: npm install -g lighthouse
+      - run:
+          name: Run Lighthouse
+          command: |
+            lighthouse https://example.com \
+              --output=json \
+              --output-path=./lighthouse-report.json \
+              --chrome-flags="--no-sandbox"
+      - store_artifacts:
+          path: lighthouse-report.json
+
+
+  # =========================
+  # 4️⃣ AI Summary (OpenAI)
+  # =========================
+  ai-summary:
+    docker:
+      - image: cimg/python:3.11
+    steps:
+      - checkout
+      - run:
+          name: Install deps
+          command: pip install requests
+      - run:
+          name: AI Summary
+          command: python ci/ai_call.py
+      - store_artifacts:
+          path: ai_response.json
+
+
+# =========================
+# WORKFLOW
+# =========================
 workflows:
   version: 2
   performance-tests:
     jobs:
       - run-k6-on-eks
       - speedcurve-trigger
+      - lighthouse-test
+      - ai-summary
