@@ -54,12 +54,12 @@ jobs:
       - run:
           name: Run k6 load tests
           command: |
-            kubectl delete job k6-demo -n k6 --ignore-not-found
+            kubectl delete job k6-load-test -n k6 --ignore-not-found
             kubectl apply -f k8s/k6-job.yaml
 
-            kubectl wait --for=condition=complete job/k6-demo -n k6 --timeout=600s
+            kubectl wait --for=condition=complete job/k6-load-test -n k6 --timeout=600s
 
-            POD=$(kubectl get pods -n k6 -l job-name=k6-demo -o jsonpath='{.items[0].metadata.name}')
+            POD=$(kubectl get pods -n k6 -l job-name=k6-load-test -o jsonpath='{.items[0].metadata.name}')
             kubectl logs -n k6 $POD | tee k6-output.log
 
       - store_artifacts:
