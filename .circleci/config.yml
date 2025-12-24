@@ -93,12 +93,19 @@ jobs:
     steps:
       - checkout
       - run:
+          name: Install Chromium
+          command: |
+            sudo apt-get update
+            sudo apt-get install -y chromium-browser
+            CHROME_PATH=$(which chromium-browser)
+            echo "Chrome installed at: $CHROME_PATH"
+      - run:
           name: Install Lighthouse
           command: npm install -g lighthouse
       - run:
           name: Run Lighthouse
           command: |
-            lighthouse https://example.com \
+            lighthouse https://www.amazon.ca \
               --output=json \
               --output-path=./lighthouse-report.json \
               --chrome-flags="--no-sandbox"
