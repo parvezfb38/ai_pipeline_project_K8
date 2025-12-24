@@ -1,33 +1,27 @@
+import time
 import os, json, requests
 
 key = os.getenv("SPEEDCURVE_KEY")
 site = os.getenv("SPEEDCURVE_SITE_ID")
-#site = "844428"   # make sure it's a string
-
-#print("DEBUG site ID =", site)
-#print("DEBUG key  =", key[:4] + "****")
-
-if not key or not site:
-    raise SystemExit("SpeedCurve env missing")
 
 url = "https://api.speedcurve.com/v1/deploys"
-
-# IMPORTANT: site_id (snake_case) NOT siteId
+auth = (key, "")
 payload = {
     "site_id": site,
     "note": "CircleCI trigger"
 }
 
-#print("DEBUG payload =", payload)
+def trigger_deploy():
+    resp = requests.post(url, auth=auth, json=payload)
+    if resp.status_code == 403:
+        print("Deploy in progress. Waiting 90 seconds...")
+        time.sleep(90)
+        return trigger_deploy()  # retry
+    return resp
 
-auth = (key, "")
-
-resp = requests.post(url, auth=auth, json=payload)
+resp = trigger_deploy()
 
 with open("speedcurve_response.json", "w") as f:
-    json.dump({
-        "status": resp.status_code,
-        "body": resp.text
-    }, f, indent=2)
+    json.dump({"status": resp.status_code, "body": resp.text}, f, indent=2)
 
-print("SpeedCurve triggered")
+print("Done.")
