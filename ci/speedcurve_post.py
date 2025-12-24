@@ -2,22 +2,24 @@ import os, json, requests
 
 key = os.getenv("SPEEDCURVE_KEY")
 site = os.getenv("SPEEDCURVE_SITE_ID")
-site = 844428
+site = "844428"   # make sure it's a string
+
 print("DEBUG site ID =", site)
 print("DEBUG key  =", key[:4] + "****")
-
 
 if not key or not site:
     raise SystemExit("SpeedCurve env missing")
 
 url = "https://api.speedcurve.com/v1/deploys"
 
+# IMPORTANT: site_id (snake_case) NOT siteId
 payload = {
-    "siteId": site,
+    "site_id": site,
     "note": "CircleCI trigger"
 }
 
-# SpeedCurve uses BASIC AUTH
+print("DEBUG payload =", payload)
+
 auth = (key, "")
 
 resp = requests.post(url, auth=auth, json=payload)
