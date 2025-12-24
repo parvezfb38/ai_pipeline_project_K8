@@ -1,37 +1,43 @@
 version: 2.1
 
 jobs:
-  # =========================
-  # 1️⃣ K6 on EKS (MULTI JS)
-  # =========================
+  # ==================================
+  # 1️⃣ K6 Load Tests on AWS EKS
+  # ==================================
   run-k6-on-eks:
     docker:
       - image: cimg/python:3.11
     environment:
-      K6_ENV: prod   # prod / stage
+      K6_ENV: prod   # prod OR stage
     steps:
       - checkout
 
+      # -------------------------------
       # Install AWS CLI + kubectl
+      # -------------------------------
       - run:
           name: Install AWS CLI & kubectl
           command: |
             sudo apt-get update
             sudo apt-get install -y curl unzip
 
-            curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+            # AWS CLI v2
+            curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o awscliv2.zip
             unzip awscliv2.zip
             sudo ./aws/install
             aws --version
 
+            # kubectl
             curl -LO "https://dl.k8s.io/release/$(curl -Ls https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
             chmod +x kubectl
             sudo mv kubectl /usr/local/bin/kubectl
             kubectl version --client
 
+      # -------------------------------
       # Connect to EKS
+      # -------------------------------
       - run:
-          name: Connect to EKS
+          name: Connect to EKS cluster
           command: |
             aws eks update-kubeconfig \
               --region $AWS_DEFAULT_REGION \
@@ -39,10 +45,15 @@ jobs:
 
             kubectl get nodes
 
-      # Create namespace + ConfigMap (MULTI FILES)
+      # -------------------------------
+      # Create namespace + ConfigMap
+      # (ALL JS from prod / stage)
+      # -------------------------------
       - run:
           name: Prepare k6 scripts
           command: |
+            echo "Running K6 environment: $K6_ENV"
+
             kubectl get ns k6 || kubectl create ns k6
             kubectl delete configmap k6-scripts -n k6 --ignore-not-found
 
@@ -50,7 +61,9 @@ jobs:
               --from-file=k6/$K6_ENV \
               -n k6
 
-      # Run k6 job
+      # -------------------------------
+      # Run k6 Job (multi JS)
+      # -------------------------------
       - run:
           name: Run k6 load tests
           command: |
@@ -65,85 +78,43 @@ jobs:
       - store_artifacts:
           path: k6-output.log
 
+      # -------------------------------
+      # AI Summary (OpenAI)
+      # SAME JOB (IMPORTANT)
+      # -------------------------------
+      - run:
+          name: AI Summary
+          command: python ci/ai_call.py
 
-  # =========================
-  # 2️⃣ SpeedCurve
-  # =========================
+      - store_artifacts:
+          path: ai_response.json
+
+
+  # ==================================
+  # 2️⃣ SpeedCurve Synthetic Test
+  # ==================================
   speedcurve-trigger:
     docker:
       - image: cimg/python:3.11
     steps:
       - checkout
       - run:
-          name: Install deps
+          name: Install dependencies
           command: pip install requests
       - run:
-          name: Trigger SpeedCurve
-          command: python3 ci/speedcurve_post.py
+          name: Trigger SpeedCurve test
+          command: python ci/speedcurve_post.py
       - store_artifacts:
           path: speedcurve_response.json
 
 
-  # =========================
-  # 3️⃣ Lighthouse
-  # =========================
-  lighthouse-test:
-    docker:
-      - image: cimg/node:20.10
-    steps:
-      - checkout
-      - run:
-          name: Install Google Chrome
-          command: |
-            sudo apt-get update
-            sudo apt-get install -y wget gnupg --no-install-recommends
-            wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
-            sudo apt-get -y install ./google-chrome-stable_current_amd64.deb || sudo apt-get -fy install
-
-            echo "Google Chrome installed at: $(which google-chrome)"
-      - run:
-          name: Install Lighthouse
-          command: npm install -g lighthouse
-      - run:
-          name: Run Lighthouse
-          command: |
-            lighthouse https://www.amazon.ca \
-              --output=json \
-              --output-path=./lighthouse-report.json \
-              --chrome-flags="--no-sandbox"
-      - store_artifacts:
-          path: lighthouse-report.json
-
-
-  # =========================
-  # 4️⃣ AI Summary (OpenAI)
-  # =========================
-  ai-summary:
-    docker:
-      - image: cimg/python:3.11
-    steps:
-      - checkout
-      - run:
-          name: Install deps
-          command: pip install requests
-      - run:
-          name: AI Summary
-          command: python ci/ai_call.py
-      - store_artifacts:
-          path: ai_response.json
-
-
-# =========================
+# ==================================
 # WORKFLOW
-# =========================
+# ==================================
 workflows:
   version: 2
   performance-tests:
     jobs:
       - run-k6-on-eks
       - speedcurve-trigger
-      - lighthouse-test
-      - ai-summary:
-          requires:
-            - run-k6-on-eks
 
