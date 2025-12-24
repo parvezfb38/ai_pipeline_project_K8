@@ -3,7 +3,7 @@ import os, json, requests
 key = os.getenv("SPEEDCURVE_KEY")
 site = os.getenv("SPEEDCURVE_SITE_ID")
 site = 844428
-print("DEBUG site =", site)
+print("DEBUG site ID =", site)
 print("DEBUG key  =", key[:4] + "****")
 
 
