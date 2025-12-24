@@ -2,10 +2,10 @@ import os, json, requests
 
 key = os.getenv("SPEEDCURVE_KEY")
 site = os.getenv("SPEEDCURVE_SITE_ID")
-site = "844428"   # make sure it's a string
+#site = "844428"   # make sure it's a string
 
-print("DEBUG site ID =", site)
-print("DEBUG key  =", key[:4] + "****")
+#print("DEBUG site ID =", site)
+#print("DEBUG key  =", key[:4] + "****")
 
 if not key or not site:
     raise SystemExit("SpeedCurve env missing")
@@ -18,7 +18,7 @@ payload = {
     "note": "CircleCI trigger"
 }
 
-print("DEBUG payload =", payload)
+#print("DEBUG payload =", payload)
 
 auth = (key, "")
 
