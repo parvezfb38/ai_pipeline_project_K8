@@ -2,13 +2,14 @@ version: 2.1
 
 jobs:
   # ==================================
-  # 1️⃣ K6 Load Tests on AWS EKS
+  # 1️⃣ K6 Load Tests on AWS EKS + AI
   # ==================================
   run-k6-on-eks:
     docker:
       - image: cimg/python:3.11
     environment:
-      K6_ENV: prod   # prod OR stage
+      K6_ENV: prod            # prod OR stage
+      AI_ENABLED: "true"      # false kar do to AI band
     steps:
       - checkout
 
@@ -62,7 +63,7 @@ jobs:
               -n k6
 
       # -------------------------------
-      # Run k6 Job (multi JS)
+      # Run k6 Job (MULTI JS)
       # -------------------------------
       - run:
           name: Run k6 load tests
@@ -80,8 +81,11 @@ jobs:
 
       # -------------------------------
       # AI Summary (OpenAI)
-      # SAME JOB (IMPORTANT)
       # -------------------------------
+      - run:
+          name: Install AI dependencies
+          command: pip install requests
+
       - run:
           name: AI Summary
           command: python ci/ai_call.py
@@ -117,4 +121,3 @@ workflows:
     jobs:
       - run-k6-on-eks
       - speedcurve-trigger
-
