@@ -6,18 +6,17 @@ site = os.getenv("SPEEDCURVE_SITE_ID")
 if not key or not site:
     raise SystemExit("SpeedCurve env missing")
 
-# Correct SpeedCurve endpoint
 url = "https://api.speedcurve.com/v1/deploys"
 
-headers = {
-    "Authorization": f"Bearer {key}",
-    "Content-Type": "application/json"
-}
-
-resp = requests.post(url, headers=headers, json={
+payload = {
     "siteId": site,
     "note": "CircleCI trigger"
-})
+}
+
+# SpeedCurve uses BASIC AUTH
+auth = (key, "")
+
+resp = requests.post(url, auth=auth, json=payload)
 
 with open("speedcurve_response.json", "w") as f:
     json.dump({
