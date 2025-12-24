@@ -134,4 +134,7 @@ workflows:
       - run-k6-on-eks
       - speedcurve-trigger
       - lighthouse-test
-      - ai-summary
+      - ai-summary:
+          requires:
+            - run-k6-on-eks
+
