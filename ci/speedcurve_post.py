@@ -3,6 +3,10 @@ import os, json, requests
 key = os.getenv("SPEEDCURVE_KEY")
 site = os.getenv("SPEEDCURVE_SITE_ID")
 
+print("DEBUG site =", site)
+print("DEBUG key  =", key[:4] + "****")
+
+
 if not key or not site:
     raise SystemExit("SpeedCurve env missing")
 
